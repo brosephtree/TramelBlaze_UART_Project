@@ -1,0 +1,361 @@
+;Declare Constants
+
+RXRDY	EQU	0001
+TXRDY	EQU	0002
+NO		EQU	1111
+YES		EQU	2222
+
+PIDUART	EQU	0000	;PORTID for UART load
+PIDLED	EQU	0001	;PORTID for LED load
+PIDDATA	EQU	0000	;PORTID for checking Rx_data
+PIDSTAT	EQU	0001	;PORTID for checking status of Rx or Tx
+
+KEY		EQU	R0	;holds ASCII codes for ISR
+RORT	EQU	R1	;holds bits saying receive or transmit
+TYPED	EQU	R2	;holds ASCII code from Rx
+CHARC	EQU	R3	;character count of the given line
+CTR		EQU	R4	;register used for counting in base conversion
+BEGINP	EQU	R5	;pointer for beginning text
+PROMPTP	EQU	R6	;pointer for "TYPE HERE: " prompt
+HOMEP	EQU	R7	;pointer for hometown text
+CHARP	EQU	R8	;pointer for character counter digits
+BACKP	EQU	R9	;pointer for BACKSPACE protocol
+SNAP	EQU	RA	;register holding snapshot of character counter to be manipulated
+RX		EQU	RB	;register stating whether or not to transmit recieved data
+ASCII	EQU	RC	;holds ASCII codes for initialization
+
+LEDC	EQU	RD	;LED counter
+LEDCC	EQU	RE	;LED counter counter
+LEDPOS	EQU	RF	;location of bus containing position of LED
+
+;-------------------------------------------------------------------------------------------------------
+
+START 
+
+;Initialize 
+
+	LOAD BEGINP, 0100	;beginning of beginning banner
+	LOAD PROMPTP, 0000	;beginning of prompt text
+	LOAD HOMEP, 001E	;when the hometown pointer is done
+	LOAD CHARP, 0024	;when the character count digit is done
+	LOAD BACKP, 0033	;when the backspace pointer is done
+	LOAD CHARC, 0000
+	LOAD CTR, 0000
+	LOAD RX, NO
+	LOAD LEDC, 0000
+	LOAD LEDPOS, 0001
+	
+	;BEGINNING BANNER
+	LOAD ASCII, 004A	;J	
+	STORE ASCII, 0100
+	LOAD ASCII, 004F	;O
+	STORE ASCII, 0101
+	LOAD ASCII, 0053	;S
+	STORE ASCII, 0102
+	LOAD ASCII, 0045	;E
+	STORE ASCII, 0103
+	LOAD ASCII, 0050	;P
+	STORE ASCII, 0104
+	LOAD ASCII, 0048	;H
+	STORE ASCII, 0105
+
+	LOAD ASCII, 0020	;SPACE
+	STORE ASCII, 0106
+
+	LOAD ASCII, 004E	;N
+	STORE ASCII, 0107
+	LOAD ASCII, 0047	;G
+	STORE ASCII, 0108
+	LOAD ASCII, 0055	;U
+	STORE ASCII, 0109
+	LOAD ASCII, 0059	;Y
+	STORE ASCII, 010A
+	LOAD ASCII, 0045	;E
+	STORE ASCII, 010B
+	LOAD ASCII, 004E	;N
+	STORE ASCII, 010C
+
+	LOAD ASCII, 0020	;SPACE
+	STORE ASCII, 010D
+	LOAD ASCII, 002D	;DASH
+	STORE ASCII, 010E
+	LOAD ASCII, 0020	;SPACE
+	STORE ASCII, 010F
+
+	LOAD ASCII, 0046	;F
+	STORE ASCII, 0110
+	LOAD ASCII, 0055	;U
+	STORE ASCII, 0111
+	LOAD ASCII, 004C	;L
+	STORE ASCII, 0112
+	LOAD ASCII, 004C	;L
+	STORE ASCII, 0113
+
+	LOAD ASCII, 0020	;SPACE
+	STORE ASCII, 0114
+
+	LOAD ASCII, 0055	;U
+	STORE ASCII, 0115
+	LOAD ASCII, 0041	;A
+	STORE ASCII, 0116
+	LOAD ASCII, 0052	;R
+	STORE ASCII, 0117
+	LOAD ASCII, 0054	;T
+	STORE ASCII, 0118
+
+	;"TYPE HERE: " prompt
+	LOAD ASCII, 000A	;LF		
+	STORE ASCII, 0000
+	LOAD ASCII, 000D	;CR
+	STORE ASCII, 0001
+
+	LOAD ASCII, 0054	;T
+	STORE ASCII, 0002
+	LOAD ASCII, 0059	;Y
+	STORE ASCII, 0003
+	LOAD ASCII, 0050	;P
+	STORE ASCII, 0004
+	LOAD ASCII, 0045	;E
+	STORE ASCII, 0005
+
+	LOAD ASCII, 0020	;SPACE
+	STORE ASCII, 0006
+
+	LOAD ASCII, 0048	;H
+	STORE ASCII, 0007
+	LOAD ASCII, 0045	;E
+	STORE ASCII, 0008
+	LOAD ASCII, 0052	;R
+	STORE ASCII, 0009
+	LOAD ASCII, 0045	;E
+	STORE ASCII, 000A
+
+	LOAD ASCII, 003A	;COLON
+	STORE ASCII, 000B
+	LOAD ASCII, 0020	;SPACE
+	STORE ASCII, 000C
+
+	;HOMETOWN
+	LOAD ASCII, 000A	;LF
+	STORE ASCII, 0010
+	LOAD ASCII, 000D	;CR
+	STORE ASCII, 0011
+
+	LOAD ASCII, 0047	;G
+	STORE ASCII, 0012
+	LOAD ASCII, 0041	;A
+	STORE ASCII, 0013
+	LOAD ASCII, 0052	;R
+	STORE ASCII, 0014
+	LOAD ASCII, 0044	;D
+	STORE ASCII, 0015
+	LOAD ASCII, 0045	;E
+	STORE ASCII, 0016
+	LOAD ASCII, 004E	;N
+	STORE ASCII, 0017
+
+	LOAD ASCII, 0020	;SPACE
+	STORE ASCII, 0018
+
+	LOAD ASCII, 0047	;G
+	STORE ASCII, 0019
+	LOAD ASCII, 0052	;R
+	STORE ASCII, 001A
+	LOAD ASCII, 004F	;O
+	STORE ASCII, 001B
+	LOAD ASCII, 0056	;V
+	STORE ASCII, 001C
+	LOAD ASCII, 0045	;E
+	STORE ASCII, 001D
+
+	;CHARACTER COUNT DIGITS
+	LOAD ASCII, 000A	;LF
+	STORE ASCII, 0020
+	LOAD ASCII, 000D	;CR
+	STORE ASCII, 0021
+
+	LOAD ASCII, 0030	;ASCII code for 0
+	STORE ASCII, 0022
+	STORE ASCII, 0023
+	
+	;BACKSPACE
+	LOAD ASCII, 0008	;BACKSPACE
+	STORE ASCII, 0030
+	LOAD ASCII, 0020	;SPACE
+	STORE ASCII, 0031
+	LOAD ASCII, 0008	;BACKSPACE
+	STORE ASCII, 0032
+
+	ENINT
+;-------------------------------------------------------------------------------------------------------
+
+;Main Loop
+
+MAIN
+	ADD LEDC, 0001
+	COMP LEDC, 0000
+	CALLZ LEDCCUP
+	JUMP MAIN
+
+LEDCCUP
+	ADD LEDCC, 4000
+	COMP LEDCC, 0000
+	CALLZ MOVELED
+	RETURN
+
+MOVELED
+	RL LEDPOS
+	OUTPUT LEDPOS, PIDLED
+	RETURN
+
+;-------------------------------------------------------------------------------------------------------
+
+; address for interrupt service routine
+
+	ADDRESS 0300
+
+;Interrupt Service Routine (ISR)
+
+ISR		
+	INPUT RORT, PIDSTAT
+	AND RORT, RXRDY
+	CALLNZ RECEIVE
+	INPUT RORT, PIDSTAT
+	AND RORT, TXRDY
+	CALLNZ TRANSMIT
+	RETEN
+
+RECEIVE
+	INPUT TYPED, PIDDATA
+	COMP TYPED, 000D		;if typed key is ENTER(Carriage Return), make transmitter start new line
+	JUMPZ NEWLINE
+	COMP TYPED, 0008		;if typed key is BACKSPACE, do backspace protocol
+	JUMPZ BACKSPACER
+	COMP TYPED, 002A		;if typed key is *, do hometown receive protocol
+	JUMPZ HOMETOWNR
+	COMP TYPED, 0040		;if typed key is @, do character count protocol
+	JUMPZ CHARACTERR
+	LOAD KEY, TYPED			;load anything else into KEY to be outputted by Tx
+	LOAD RX, YES
+	RETURN
+
+NEWLINE
+	CALL RESETCHAR
+	LOAD PROMPTP, 0000		;reset prompt pointer
+	RETURN
+
+BACKSPACER
+	COMP CHARC, 0000		;if the character count is 0, do nothing
+	JUMPZ DONOTHING
+	LOAD BACKP, 0030		;reset BACKSPACE pointer
+	SUB CHARC, 0001			;decrement character count
+	CALL DECIMALCOUNTER
+	RETURN
+
+DONOTHING
+	RETURN
+
+HOMETOWNR
+	CALL RESETCHAR
+	LOAD HOMEP, 0010		;reset hometown pointer
+	LOAD PROMPTP, 0000		;reset prompt pointer
+	RETURN
+
+CHARACTERR
+	LOAD CHARP, 0020		;reset character counter pointer
+	LOAD PROMPTP, 0000		;reset prompt pointer
+	RETURN
+
+TRANSMIT
+	COMP BEGINP, 0119		;if the beginning text is not done, print that first
+	JUMPNZ BEGIN
+	COMP CHARP, 0024		;if the character count is not done, do that
+	JUMPNZ CHARACTERT
+	COMP HOMEP, 001E		;if the hometown text is not done, do that
+	JUMPNZ HOMETOWNT
+	COMP BACKP, 0033		;if the BACKSPACEing is not done, do that
+	JUMPNZ BACKSPACET
+	COMP PROMPTP, 000D		;if the prompt is in not done, do that
+	JUMPNZ PROMPT
+	COMP RX, YES			;if a signal was received, transmit it
+	JUMPZ SEND
+	RETURN
+
+BEGIN
+	FETCH KEY, BEGINP
+	OUTPUT KEY, PIDUART
+	ADD BEGINP, 0001
+	RETURN
+
+HOMETOWNT
+	FETCH KEY, HOMEP
+	OUTPUT KEY, PIDUART
+	ADD HOMEP, 0001
+	RETURN
+	
+BACKSPACET
+	FETCH KEY, BACKP
+	OUTPUT KEY, PIDUART
+	ADD BACKP, 0001
+	RETURN
+
+PROMPT
+	FETCH KEY, PROMPTP
+	OUTPUT KEY, PIDUART
+	ADD PROMPTP, 0001
+	RETURN
+
+CHARACTERT
+	FETCH KEY, CHARP
+	OUTPUT KEY, PIDUART
+	ADD CHARP, 0001
+	COMP CHARP, 0024	;when the character count digit is done
+	CALLZ RESETCHAR
+	RETURN
+	
+RESETCHAR
+	LOAD CHARC, 0000
+	CALL DECIMALCOUNTER
+	RETURN
+
+SEND
+	OUTPUT KEY, PIDUART	;output key typed in Rx
+	ADD CHARC, 0001		;add 1 to character counter
+	CALL DECIMALCOUNTER
+	LOAD RX, NO
+	COMP CHARC, 0028	;if character count is 40, start new line
+	CALLZ NEWLINE
+	RETURN
+
+DECIMALCOUNTER
+	LOAD SNAP, CHARC
+	CALL RESETCTR
+	JUMP TENS
+
+RESETCTR
+	LOAD CTR, 0030		;starts CTR as ASCII code for 0, and increments increase it to the next ASCII code
+	RETURN
+
+TENS
+	STORE CTR, 0022		;update tens place
+	COMP SNAP, 000A		;000A is hexadecimal for 10
+	CALLC RESETCTR
+	JUMPC ONES
+	SUB SNAP, 000A
+	ADD CTR, 0001
+	JUMP TENS
+
+ONES
+	ADD SNAP, CTR
+	STORE SNAP, 0023	;update ones place
+	RETURN
+
+;-------------------------------------------------------------------------------------------------------
+
+; ISR vectored through 0FFE
+
+	ADDRESS 0FFE
+
+ENDIT	JUMP ISR
+
+	END
